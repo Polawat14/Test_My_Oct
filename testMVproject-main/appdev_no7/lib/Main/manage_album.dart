@@ -20,7 +20,7 @@ class _CreateAlbumScreenState extends State<CreateAlbumScreen> {
       final String? displayName = _user!.displayName ?? _user!.email;  // ใช้ displayName หรือ email ถ้า displayName ไม่มี
 
       // เพิ่มข้อมูลอัลบั้มใน Realtime Database ภายใต้ userUid
-      await _database.child('users').child(userUid).child(albumName).set({
+      await _database.child('users').child(userUid).child(albumName).child('Info').set({
         'created_at': DateTime.now().toIso8601String(),
         'user_email': _user!.email,
       });

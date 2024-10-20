@@ -1,10 +1,15 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:firebase_database/firebase_database.dart';
 
 class ManageWordsPage extends StatefulWidget {
-  const ManageWordsPage({super.key, required String albumName});
+  final String userId; // รับ userId
+  final String albumName; // รับ albumName
+
+  // Constructor เพื่อรับค่า userId และ albumName
+  ManageWordsPage({required this.userId, required this.albumName});
 
   @override
   _ManageWordsPageState createState() => _ManageWordsPageState();
@@ -33,6 +38,7 @@ class _ManageWordsPageState extends State<ManageWordsPage> {
     _loadWords();
   }
 
+  // โหลดคำศัพท์จาก SharedPreferences
   void _loadWords() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? storedWords = prefs.getString('words');
@@ -44,26 +50,41 @@ class _ManageWordsPageState extends State<ManageWordsPage> {
     }
   }
 
+  // บันทึกคำศัพท์ลงใน SharedPreferences
   void _saveWordsToPreferences() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.setString('words', json.encode(_words));
   }
 
-  void _saveWordsToFirebase() {
-    DatabaseReference ref = FirebaseDatabase.instance.ref("Vocabulary/word");
-    for (var word in _words) {
-      ref.push().set({
-        "word": word['word'],
-        "translation": word['translation'],
-        "type": word['type'],
-      }).then((_) {
-        print('Word saved successfully');
-      }).catchError((error) {
-        print('Error saving word: $error');
-      });
-    }
-  }
+  // บันทึกคำศัพท์ลง Firebase ตามอัลบั้มที่กำหนด
+  // ฟังก์ชันบันทึกคำศัพท์ลง Firebase ตามอัลบั้มที่กำหนด
+Future<void> _saveWordsToFirebase() async {
+  try {
+    // ดึง userId จาก Firebase Authentication
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
 
+    if (userId != null) {
+      String albumName = widget.albumName; // ดึง albumName จาก widget
+      DatabaseReference ref = FirebaseDatabase.instance.ref("users/$userId/$albumName/vocab");
+
+      for (var word in _words) {
+        await ref.child(word['word']!).set({
+          "translation": word['translation'],
+          "type": word['type'],
+        });
+      }
+
+      print('Words saved successfully');
+    } else {
+      print('User is not logged in.');
+      // คุณอาจต้องการ redirect ไปยังหน้า login หรือแสดงข้อความแจ้งเตือน
+    }
+  } catch (error) {
+    print('Error saving words: $error');
+  }
+}
+
+  // ฟังก์ชันเพิ่มคำศัพท์
   void _addWord() {
     if (_selectedType != null &&
         _wordController.text.isNotEmpty &&
@@ -77,7 +98,7 @@ class _ManageWordsPageState extends State<ManageWordsPage> {
         });
       });
 
-      // อัปเดตข้อมูลใน SharedPreferences และ Firebase
+      // บันทึกคำศัพท์ลง SharedPreferences และ Firebase
       _saveWordsToPreferences();
       _saveWordsToFirebase();
 
@@ -88,6 +109,7 @@ class _ManageWordsPageState extends State<ManageWordsPage> {
     }
   }
 
+  // ฟังก์ชันลบคำศัพท์
   void _removeWord(int index) {
     setState(() {
       _words.removeAt(index);
@@ -96,6 +118,7 @@ class _ManageWordsPageState extends State<ManageWordsPage> {
     _saveWordsToPreferences();
   }
 
+  // ฟังก์ชันแก้ไขคำศัพท์
   void _editWord(int index) {
     _wordController.text = _words[index]['word']!;
     _translationController.text = _words[index]['translation']!;
@@ -162,7 +185,7 @@ class _ManageWordsPageState extends State<ManageWordsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Words'),
+        title: Text('Manage Words (${widget.albumName})'),
       ),
       body: Column(
         children: [

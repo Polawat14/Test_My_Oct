@@ -6,7 +6,6 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
 import '../Login & regist/login_screen.dart';
-import '';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
@@ -182,6 +181,17 @@ class _SettingPageState extends State<SettingPage> {
                 ),
               ],
             ),
+             const Spacer(), // ดันปุ่มลงไปด้านล่าง
+            ElevatedButton(
+              onPressed: () {
+            // โค้ดสำหรับ sign out
+            Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => LoginScreen()), // หน้า Login ของคุณ
+            (Route<dynamic> route) => false, // เคลียร์หน้าทั้งหมดใน stack
+            );
+            },
+            child: const Text('Sign Out'),
+            ),
           ],
         ),
       ),
@@ -353,7 +363,7 @@ class AlbumDetailScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => ManageWordsPage(albumName: albumName),
+                  builder: (context) => ManageWordsPage(albumName: albumName, userId: '',),
                 ),
               );
             },
