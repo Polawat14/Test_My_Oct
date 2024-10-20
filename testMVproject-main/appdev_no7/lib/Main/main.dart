@@ -344,35 +344,104 @@ class VocabularyPage extends StatefulWidget {
   @override
   _Vocabularystate createState() => _Vocabularystate();
 }
-class AlbumDetailScreen extends StatelessWidget {
+class AlbumDetailScreen extends StatefulWidget {
   final String albumName;
 
-  const AlbumDetailScreen({Key? key, required this.albumName})
-      : super(key: key);
+  const AlbumDetailScreen({Key? key, required this.albumName}) : super(key: key);
+
+  @override
+  _AlbumDetailScreenState createState() => _AlbumDetailScreenState();
+}
+
+class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
+  final DatabaseReference _database = FirebaseDatabase.instance.ref();
+  final User? _user = FirebaseAuth.instance.currentUser;
+
+  Future<List<Map<String, dynamic>>> _getWords() async {
+    final String userUid = _user!.uid;
+    final snapshot = await _database.child('users/$userUid/${widget.albumName}/vocab').get();
+    if (snapshot.exists) {
+      final words = Map<String, dynamic>.from(snapshot.value as Map);
+      return words.entries.map((entry) {
+        return {
+          'word': entry.key,
+          'translation': entry.value['translation'],
+          'type': entry.value['type'],
+        };
+      }).toList();
+    } else {
+      return [];
+    }
+  }
+
+  Future<void> _deleteWord(String word) async {
+    final String userUid = _user!.uid;
+    try {
+      await _database.child('users/$userUid/${widget.albumName}/vocab/$word').remove();
+      print("Word '$word' deleted successfully.");
+    } catch (error) {
+      print("Error deleting word: $error");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(albumName),
+        title: Text(widget.albumName),
         actions: [
           IconButton(
-            icon: Icon(Icons.add),
+            icon: const Icon(Icons.add),
             tooltip: 'Add Word',
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => ManageWordsPage(albumName: albumName, userId: '',),
+                  builder: (context) => ManageWordsPage(
+                    albumName: widget.albumName,
+                    userId: '',
+                  ),
                 ),
               );
             },
           ),
         ],
       ),
-      body: Center(
-        child: Text(
-            'Details for album: $albumName'), // คุณสามารถแก้ไขส่วนนี้ให้แสดงคำศัพท์ที่มีในอัลบั้มได้
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _getWords(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+                child: Text('No words available in this album.'));
+          } else {
+            final words = snapshot.data!;
+            return ListView.builder(
+              itemCount: words.length,
+              itemBuilder: (context, index) {
+                final word = words[index];
+                return ListTile(
+                  title: Text(word['word']),
+                  subtitle: Text(
+                      'Translation: ${word['translation']} (${word['type']})'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.black),
+                    onPressed: () async {
+                      await _deleteWord(word['word']);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Word "${word['word']}" deleted')),
+                      );
+                      setState(() {});
+                    },
+                  ),
+                );
+              },
+            );
+          }
+        },
       ),
     );
   }
