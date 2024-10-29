@@ -209,41 +209,93 @@ class GamePage extends StatefulWidget {
 }
 
 class _GamePageState extends State<GamePage> {
-  final List<Map<String, String>> _words = [
-    {'word': 'apple', 'translation': 'แอปเปิ้ล'},
-    {'word': 'dog', 'translation': 'หมา'},
-    {'word': 'cat', 'translation': 'แมว'},
-    {'word': 'car', 'translation': 'รถยนต์'},
-    {'word': 'sun', 'translation': 'ดวงอาทิตย์'},
-    {'word': 'moon', 'translation': 'พระจันทร์'},
-    {'word': 'bird', 'translation': 'นก'},
-    {'word': 'fish', 'translation': 'ปลา'},
-  ];
+  final DatabaseReference _database = FirebaseDatabase.instance.ref();
+  final User? _user = FirebaseAuth.instance.currentUser;
 
+  List<Map<String, String>> _words = [];
   List<String> _tiles = [];
   List<bool> _revealed = [];
   int? _firstTileIndex;
   bool _canTap = true;
+  String _selectedAlbum = '';
+  List<String> _albumNames = [];
 
   @override
   void initState() {
     super.initState();
-    _setupGame();
+    _loadAlbumNames();
   }
 
-  void _setupGame() {
-    List<String> wordList = [];
-    for (var word in _words) {
-      wordList.add(word['word']!);
-      wordList.add(word['translation']!);
-    }
-    wordList.shuffle(Random());
+  // ฟังก์ชันเพื่อดึงรายชื่ออัลบั้มจาก Firebase
+  // ฟังก์ชันเพื่อดึงรายชื่ออัลบั้มจาก Firebase
+void _loadAlbumNames() async {
+  if (_user == null) return;
+
+  final userUid = _user!.uid;
+  final snapshot = await _database.child('users').child(userUid).get();
+
+  if (snapshot.exists) {
     setState(() {
-      _tiles = wordList;
-      _revealed = List.filled(_tiles.length, false);
-      _firstTileIndex = null;
-      _canTap = true;
+      // ดึงเฉพาะโหนดที่มีอยู่ เช่น 'front' หรือ 'jing'
+      _albumNames = (snapshot.value as Map).keys.cast<String>().toList();
+      if (_albumNames.isNotEmpty) {
+        _selectedAlbum = _albumNames[0];
+        _loadAlbumWords(_selectedAlbum);
+      }
     });
+  }
+}
+
+// ฟังก์ชันเพื่อดึงคำศัพท์ของอัลบั้มที่เลือกจาก Firebase
+void _loadAlbumWords(String albumName) async {
+  if (_user == null) return;
+
+  final userUid = _user!.uid;
+  final snapshot = await _database.child('users').child(userUid).child(albumName).child('vocab').get();
+
+  if (snapshot.exists) {
+    List<Map<String, String>> words = [];
+    (snapshot.value as Map).forEach((key, value) {
+      words.add({
+        'word': key,  // ใช้ key เป็นคำศัพท์
+        'translation': value['translation'],  // ดึง translation จาก Firebase
+      });
+    });
+
+    setState(() {
+      _words = words;
+      _setupGame();
+    });
+  }
+}
+
+  void _setupGame() {
+  List<String> wordList = [];
+  
+  // นำคำศัพท์ทั้งหมดจาก _words ใส่ในรายการ wordList สองครั้ง (คำและแปล)
+  for (var word in _words) {
+    wordList.add(word['word']!);  
+    wordList.add(word['translation']!);
+  }
+
+  // สุ่มตำแหน่งของคำศัพท์
+  wordList.shuffle(Random());
+
+  setState(() {
+    _tiles = wordList;
+    _revealed = List.filled(_tiles.length, false);
+    _firstTileIndex = null;
+    _canTap = true;
+  });
+}
+
+  void _onAlbumChanged(String? newAlbum) {
+    if (newAlbum != null && newAlbum != _selectedAlbum) {
+      setState(() {
+        _selectedAlbum = newAlbum;
+        _loadAlbumWords(_selectedAlbum);
+      });
+    }
   }
 
   void _onTileTap(int index) {
@@ -294,13 +346,25 @@ class _GamePageState extends State<GamePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('เกมจับคู่คำศัพท์'),
+        actions: [
+          DropdownButton<String>(
+            value: _selectedAlbum,
+            onChanged: _onAlbumChanged,
+            items: _albumNames.map((album) {
+              return DropdownMenuItem(
+                value: album,
+                child: Text(album),
+              );
+            }).toList(),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
           children: [
             Expanded(
-              child: _buildGrid(), // แสดงตาราง
+              child: _buildGrid(),
             ),
             ElevatedButton(
               onPressed: _setupGame,
@@ -313,21 +377,20 @@ class _GamePageState extends State<GamePage> {
   }
 
   Widget _buildGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4, // ตาราง 4x4
-      ),
-      itemCount: _tiles.length,
-      itemBuilder: (context, index) {
-        return GestureDetector(
-          onTap: () => _onTileTap(index),
-          child: Card(
-            color: _revealed[index] ? Colors.white : Colors.blue,
-            child: Center(
-              child: Text(
-                _revealed[index] ? _tiles[index] : '',
-                style: const TextStyle(fontSize: 18),
+  return GridView.builder(
+    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: 4, // แสดง 4 ช่องในแนวนอน
+    ),
+    itemCount: _tiles.length,
+    itemBuilder: (context, index) {
+      return GestureDetector(
+        onTap: () => _onTileTap(index),
+        child: Card(
+          color: _revealed[index] ? Colors.white : Colors.blue,
+          child: Center(
+            child: Text(
+              _revealed[index] ? _tiles[index] : '',
+              style: const TextStyle(fontSize: 18),
               ),
             ),
           ),
@@ -356,6 +419,7 @@ class AlbumDetailScreen extends StatefulWidget {
 class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
   final User? _user = FirebaseAuth.instance.currentUser;
+
 
   Future<List<Map<String, dynamic>>> _getWords() async {
     final String userUid = _user!.uid;
