@@ -269,12 +269,15 @@ void _loadAlbumWords(String albumName) async {
   }
 }
 
-  void _setupGame() {
+void _setupGame() {
   List<String> wordList = [];
-  
-  // นำคำศัพท์ทั้งหมดจาก _words ใส่ในรายการ wordList สองครั้ง (คำและแปล)
-  for (var word in _words) {
-    wordList.add(word['word']!);  
+
+  // ตรวจสอบว่าจำนวนคำใน _words มีมากกว่า 8 หรือไม่
+  final wordsToUse = _words.length > 8 ? (_words..shuffle()).take(8).toList() : _words;
+
+  // นำคำศัพท์และคำแปลของ 8 คำที่สุ่มได้ ใส่ใน wordList (คำและแปล)
+  for (var word in wordsToUse) {
+    wordList.add(word['word']!);
     wordList.add(word['translation']!);
   }
 
